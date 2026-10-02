@@ -60,7 +60,7 @@ app.get("/health", async (req, res) => {
 // ============================================
 // ENDPOINT: Datos del Pokémon
 // ============================================
-app.get("/api/pokemon/:id", async (req, res) => {
+app.get("/pokemon/:id", async (req, res) => {
   const { valid, id } = validatePokemonId(req.params.id);
   if (!valid) {
     return res.status(400).json({ error: "invalid_id" });
@@ -89,7 +89,7 @@ app.get("/api/pokemon/:id", async (req, res) => {
 // ============================================
 // ENDPOINT: Sprites del Pokémon
 // ============================================
-app.get("/api/pokemon/:id/sprites", async (req, res) => {
+app.get("/pokemon/:id/sprites", async (req, res) => {
   const { valid, id } = validatePokemonId(req.params.id);
   if (!valid) {
     return res.status(400).json({ error: "invalid_id" });
@@ -119,7 +119,7 @@ app.get("/api/pokemon/:id/sprites", async (req, res) => {
 // ============================================
 // ENDPOINT: Movimientos del Pokémon
 // ============================================
-app.get("/api/pokemon/:id/moves", async (req, res) => {
+app.get("/pokemon/:id/moves", async (req, res) => {
   const { valid, id } = validatePokemonId(req.params.id);
   if (!valid) {
     return res.status(400).json({ error: "invalid_id" });
