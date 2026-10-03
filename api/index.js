@@ -189,6 +189,49 @@ app.get("/health", async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT: Lista de Pokémon (solo ID y nombre)
+// ============================================
+/**
+ * @swagger
+ * /pokemon:
+ *   get:
+ *     summary: Listar todos los Pokémon con su ID y nombre
+ *     tags: [Pokémon]
+ *     responses:
+ *       200:
+ *         description: Lista de Pokémon
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                     format: int32
+ *                     example: 25
+ *                   name:
+ *                     type: string
+ *                     example: pikachu
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
+ */
+app.get("/pokemon", async (req, res) => {
+  try {
+    const pool = getPool();
+    const [rows] = await pool.execute(
+      "SELECT id, name FROM pokemon ORDER BY id"
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error("[POKEMON LIST] Error:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// ============================================
 // ENDPOINT: Datos completos del Pokémon (plano: info + sprites + moves)
 // ============================================
 /**
