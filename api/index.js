@@ -90,14 +90,26 @@ app.use((req, res, next) => {
 });
 
 // ============================================
-// HELPER: Validar ID de Pokémon
+// HELPER: Resolver identificador (ID o nombre) a Pokémon
 // ============================================
-function validatePokemonId(idParam) {
-  const id = parseInt(idParam, 10);
-  if (isNaN(id) || id <= 0) {
-    return { valid: false, id: null };
+async function resolvePokemonIdentifier(identifier) {
+  const pool = getPool();
+  const cleanIdentifier = identifier.trim();
+  const isNumeric = /^\d+$/.test(cleanIdentifier);
+  
+  let query, params;
+  if (isNumeric) {
+    query = `SELECT id, name FROM pokemon WHERE id = ?`;
+    params = [parseInt(cleanIdentifier, 10)];
+  } else {
+    // Normalizar nombre: lowercase, espacios a guiones
+    const normalizedName = cleanIdentifier.toLowerCase().replace(/\s+/g, '-');
+    query = `SELECT id, name FROM pokemon WHERE LOWER(name) = ?`;
+    params = [normalizedName];
   }
-  return { valid: true, id };
+  
+  const [rows] = await pool.execute(query, params);
+  return rows[0] || null;
 }
 
 // ============================================
@@ -182,19 +194,19 @@ app.get("/health", async (req, res) => {
 // ============================================
 /**
  * @swagger
- * /pokemon/{id}:
+ * /pokemon/{identifier}:
  *   get:
  *     summary: Obtener datos básicos de un Pokémon
  *     tags: [Pokémon]
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: identifier
  *         required: true
- *         description: ID del Pokémon (número de Pokédex)
+ *         description: ID (número) o nombre del Pokémon (ej: 25 o pikachu)
  *         schema:
- *           type: integer
- *           minimum: 1
- *         example: 25
+ *           type: string
+ *           pattern: '^(\\d+|[a-zA-Z0-9\\-]+)$'
+ *         example: "pikachu"
  *     responses:
  *       200:
  *         description: Datos del Pokémon
@@ -209,19 +221,19 @@ app.get("/health", async (req, res) => {
  *       500:
  *         $ref: '#/components/responses/InternalError'
  */
-app.get("/pokemon/:id", async (req, res) => {
-  const { valid, id } = validatePokemonId(req.params.id);
-  if (!valid) {
-    return res.status(400).json({ error: "invalid_id" });
-  }
-
+app.get("/pokemon/:identifier", async (req, res) => {
   try {
+    const pokemon = await resolvePokemonIdentifier(req.params.identifier);
+    if (!pokemon) {
+      return res.status(404).json({ error: "not_found" });
+    }
+
     const pool = getPool();
     const [rows] = await pool.execute(
       `SELECT id, name, height_m, weight_kg, species_url 
        FROM pokemon 
        WHERE id = ?`,
-      [id]
+      [pokemon.id]
     );
 
     if (rows.length === 0) {
@@ -240,19 +252,19 @@ app.get("/pokemon/:id", async (req, res) => {
 // ============================================
 /**
  * @swagger
- * /pokemon/{id}/sprites:
+ * /pokemon/{identifier}/sprites:
  *   get:
  *     summary: Obtener sprites/imágenes de un Pokémon
  *     tags: [Pokémon]
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: identifier
  *         required: true
- *         description: ID del Pokémon (número de Pokédex)
+ *         description: ID (número) o nombre del Pokémon (ej: 25 o pikachu)
  *         schema:
- *           type: integer
- *           minimum: 1
- *         example: 25
+ *           type: string
+ *           pattern: '^(\\d+|[a-zA-Z0-9\\-]+)$'
+ *         example: "pikachu"
  *     responses:
  *       200:
  *         description: URLs de sprites del Pokémon
@@ -267,20 +279,20 @@ app.get("/pokemon/:id", async (req, res) => {
  *       500:
  *         $ref: '#/components/responses/InternalError'
  */
-app.get("/pokemon/:id/sprites", async (req, res) => {
-  const { valid, id } = validatePokemonId(req.params.id);
-  if (!valid) {
-    return res.status(400).json({ error: "invalid_id" });
-  }
-
+app.get("/pokemon/:identifier/sprites", async (req, res) => {
   try {
+    const pokemon = await resolvePokemonIdentifier(req.params.identifier);
+    if (!pokemon) {
+      return res.status(404).json({ error: "not_found" });
+    }
+
     const pool = getPool();
     const [rows] = await pool.execute(
       `SELECT pokemon_id, front_default, front_shiny, back_default, 
               official_artwork_front, dream_world_front
        FROM pokemon_sprites 
        WHERE pokemon_id = ?`,
-      [id]
+      [pokemon.id]
     );
 
     if (rows.length === 0) {
@@ -299,19 +311,19 @@ app.get("/pokemon/:id/sprites", async (req, res) => {
 // ============================================
 /**
  * @swagger
- * /pokemon/{id}/moves:
+ * /pokemon/{identifier}/moves:
  *   get:
  *     summary: Obtener lista de movimientos de un Pokémon
  *     tags: [Pokémon]
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: identifier
  *         required: true
- *         description: ID del Pokémon (número de Pokédex)
+ *         description: ID (número) o nombre del Pokémon (ej: 25 o pikachu)
  *         schema:
- *           type: integer
- *           minimum: 1
- *         example: 25
+ *           type: string
+ *           pattern: '^(\\d+|[a-zA-Z0-9\\-]+)$'
+ *         example: "pikachu"
  *     responses:
  *       200:
  *         description: Lista de movimientos del Pokémon
@@ -326,25 +338,15 @@ app.get("/pokemon/:id/sprites", async (req, res) => {
  *       500:
  *         $ref: '#/components/responses/InternalError'
  */
-app.get("/pokemon/:id/moves", async (req, res) => {
-  const { valid, id } = validatePokemonId(req.params.id);
-  if (!valid) {
-    return res.status(400).json({ error: "invalid_id" });
-  }
-
+app.get("/pokemon/:identifier/moves", async (req, res) => {
   try {
-    const pool = getPool();
-    
-    // Primero verificar que el Pokémon existe
-    const [pokemonRows] = await pool.execute(
-      `SELECT id FROM pokemon WHERE id = ?`,
-      [id]
-    );
-    
-    if (pokemonRows.length === 0) {
+    const pokemon = await resolvePokemonIdentifier(req.params.identifier);
+    if (!pokemon) {
       return res.status(404).json({ error: "not_found" });
     }
 
+    const pool = getPool();
+    
     // Obtener movimientos
     const [moveRows] = await pool.execute(
       `SELECT m.name 
@@ -352,13 +354,13 @@ app.get("/pokemon/:id/moves", async (req, res) => {
        JOIN pokemon_moves pm ON m.id = pm.move_id
        WHERE pm.pokemon_id = ?
        ORDER BY m.name`,
-      [id]
+      [pokemon.id]
     );
 
     const moves = moveRows.map(row => row.name);
 
     res.json({
-      pokemon_id: id,
+      pokemon_id: pokemon.id,
       moves,
     });
   } catch (err) {
