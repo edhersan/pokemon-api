@@ -232,6 +232,180 @@ app.get("/pokemon", async (req, res) => {
 });
 
 // ============================================
+// ENDPOINT: Agregar un Pokémon
+// ============================================
+/**
+ * @swagger
+ * /pokemon:
+ *   post:
+ *     summary: Agregar un Pokémon
+ *     tags: [Pokémon]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               id:
+ *                 type: integer
+ *                 minimum: 1
+ *               name:
+ *                 type: string
+ *                 example: pikachu
+ *               height_m:
+ *                 type: number
+ *               weight_kg:
+ *                 type: number
+ *               species_url:
+ *                 type: string
+ *                 format: uri
+ *     responses:
+ *       201:
+ *         description: Pokémon creado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PokemonStats'
+ *       400:
+ *         description: Datos inválidos para crear el Pokémon
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       409:
+ *         description: El Pokémon ya existe
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
+ */
+app.post("/pokemon", async (req, res) => {
+  const { id, name, height_m, weight_kg, species_url } = req.body || {};
+  const normalizedName = typeof name === "string"
+    ? name.trim().toLowerCase().replace(/\s+/g, "-")
+    : "";
+
+  if (!normalizedName || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalizedName)) {
+    return res.status(400).json({ error: "invalid_pokemon" });
+  }
+
+  if (id !== undefined && (!Number.isInteger(id) || id <= 0)) {
+    return res.status(400).json({ error: "invalid_pokemon" });
+  }
+
+  try {
+    const pool = getPool();
+    const columns = ["name", "height_m", "weight_kg", "species_url"];
+    const values = [normalizedName, height_m ?? null, weight_kg ?? null, species_url ?? null];
+
+    if (id !== undefined) {
+      columns.unshift("id");
+      values.unshift(id);
+    }
+
+    const placeholders = columns.map(() => "?").join(", ");
+    await pool.execute(
+      `INSERT INTO pokemon (${columns.join(", ")}) VALUES (${placeholders})`,
+      values
+    );
+
+    const [rows] = await pool.execute(
+      `SELECT id, name, height_m, weight_kg, species_url FROM pokemon WHERE name = ?`,
+      [normalizedName]
+    );
+
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ error: "already_exists" });
+    }
+
+    console.error("[POKEMON CREATE] Error:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// ============================================
+// ENDPOINT: Eliminar un Pokémon por nombre
+// ============================================
+/**
+ * @swagger
+ * /pokemon/{name}:
+ *   delete:
+ *     summary: Eliminar un Pokémon por nombre
+ *     tags: [Pokémon]
+ *     parameters:
+ *       - name: name
+ *         in: path
+ *         required: true
+ *         description: Nombre del Pokémon (no distingue mayúsculas/minúsculas)
+ *         schema:
+ *           type: string
+ *         example: pikachu
+ *     responses:
+ *       200:
+ *         description: Pokémon eliminado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Pokémon eliminado correctamente
+ *                 pokemon:
+ *                   $ref: '#/components/schemas/PokemonStats'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
+ */
+app.delete("/pokemon/:name", async (req, res) => {
+  const name = req.params.name.trim().toLowerCase().replace(/\s+/g, "-");
+
+  try {
+    const pool = getPool();
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+      const [rows] = await connection.execute(
+        "SELECT id, name, height_m, weight_kg, species_url FROM pokemon WHERE LOWER(name) = ? FOR UPDATE",
+        [name]
+      );
+
+      if (rows.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ error: "not_found" });
+      }
+
+      const pokemon = rows[0];
+      await connection.execute("DELETE FROM pokemon_moves WHERE pokemon_id = ?", [pokemon.id]);
+      await connection.execute("DELETE FROM pokemon_sprites WHERE pokemon_id = ?", [pokemon.id]);
+      await connection.execute("DELETE FROM pokemon WHERE id = ?", [pokemon.id]);
+      await connection.commit();
+
+      res.json({
+        message: "Pokémon eliminado correctamente",
+        pokemon
+      });
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  } catch (err) {
+    console.error("[POKEMON DELETE] Error:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// ============================================
 // ENDPOINT: Datos completos del Pokémon (plano: info + sprites + moves)
 // ============================================
 /**
