@@ -202,7 +202,7 @@ app.get("/health", async (req, res) => {
  *       - in: path
  *         name: identifier
  *         required: true
- *         description: ID (número) o nombre del Pokémon (ej: 25 o pikachu)
+ *         description: ID (número) o nombre del Pokémon (ej. 25 o pikachu)
  *         schema:
  *           type: string
  *           pattern: '^(\\d+|[a-zA-Z0-9\\-]+)$'
@@ -260,7 +260,7 @@ app.get("/pokemon/:identifier", async (req, res) => {
  *       - in: path
  *         name: identifier
  *         required: true
- *         description: ID (número) o nombre del Pokémon (ej: 25 o pikachu)
+ *         description: ID (número) o nombre del Pokémon (ej. 25 o pikachu)
  *         schema:
  *           type: string
  *           pattern: '^(\\d+|[a-zA-Z0-9\\-]+)$'
@@ -319,7 +319,7 @@ app.get("/pokemon/:identifier/sprites", async (req, res) => {
  *       - in: path
  *         name: identifier
  *         required: true
- *         description: ID (número) o nombre del Pokémon (ej: 25 o pikachu)
+ *         description: ID (número) o nombre del Pokémon (ej. 25 o pikachu)
  *         schema:
  *           type: string
  *           pattern: '^(\\d+|[a-zA-Z0-9\\-]+)$'
