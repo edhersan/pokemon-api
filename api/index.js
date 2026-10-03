@@ -2,9 +2,27 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const swaggerJsdoc = require("swagger-jsdoc");
+const swaggerUi = require("swagger-ui-express");
+const swaggerDefinition = require("../lib/swagger");
 const { createPool, testConnection, getPool } = require("../lib/db");
 
 const app = express();
+
+// Swagger spec
+const swaggerSpec = swaggerJsdoc(swaggerDefinition);
+
+// Swagger UI en /docs
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Pokédex API Documentation'
+}));
+
+// Spec JSON en /docs.json
+app.get("/docs.json", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(swaggerSpec);
+});
 
 app.use(cors());
 app.use(express.json());
@@ -36,8 +54,63 @@ function validatePokemonId(idParam) {
 }
 
 // ============================================
+// ENDPOINT: Raíz - Info de la API
+// ============================================
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: Información general de la API
+ *     tags: [Sistema]
+ *     responses:
+ *       200:
+ *         description: Información de la API
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 name:
+ *                   type: string
+ *                   example: Pokédex API
+ *                 version:
+ *                   type: string
+ *                   example: 1.0.0
+ *                 docs:
+ *                   type: string
+ *                   example: /docs
+ */
+app.get("/", (req, res) => {
+  res.json({
+    name: "Pokédex API",
+    version: "1.0.0",
+    docs: "/docs"
+  });
+});
+
+// ============================================
 // ENDPOINT: Health Check
 // ============================================
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Verificar salud de la API y base de datos
+ *     tags: [Sistema]
+ *     responses:
+ *       200:
+ *         description: API y base de datos funcionando
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthResponse'
+ *       503:
+ *         description: Base de datos desconectada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthResponse'
+ */
 app.get("/health", async (req, res) => {
   try {
     await testConnection();
@@ -60,6 +133,35 @@ app.get("/health", async (req, res) => {
 // ============================================
 // ENDPOINT: Datos del Pokémon
 // ============================================
+/**
+ * @swagger
+ * /pokemon/{id}:
+ *   get:
+ *     summary: Obtener datos básicos de un Pokémon
+ *     tags: [Pokémon]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID del Pokémon (número de Pokédex)
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 25
+ *     responses:
+ *       200:
+ *         description: Datos del Pokémon
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Pokemon'
+ *       400:
+ *         $ref: '#/components/responses/InvalidId'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
+ */
 app.get("/pokemon/:id", async (req, res) => {
   const { valid, id } = validatePokemonId(req.params.id);
   if (!valid) {
@@ -89,6 +191,35 @@ app.get("/pokemon/:id", async (req, res) => {
 // ============================================
 // ENDPOINT: Sprites del Pokémon
 // ============================================
+/**
+ * @swagger
+ * /pokemon/{id}/sprites:
+ *   get:
+ *     summary: Obtener sprites/imágenes de un Pokémon
+ *     tags: [Pokémon]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID del Pokémon (número de Pokédex)
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 25
+ *     responses:
+ *       200:
+ *         description: URLs de sprites del Pokémon
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Sprites'
+ *       400:
+ *         $ref: '#/components/responses/InvalidId'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
+ */
 app.get("/pokemon/:id/sprites", async (req, res) => {
   const { valid, id } = validatePokemonId(req.params.id);
   if (!valid) {
@@ -119,6 +250,35 @@ app.get("/pokemon/:id/sprites", async (req, res) => {
 // ============================================
 // ENDPOINT: Movimientos del Pokémon
 // ============================================
+/**
+ * @swagger
+ * /pokemon/{id}/moves:
+ *   get:
+ *     summary: Obtener lista de movimientos de un Pokémon
+ *     tags: [Pokémon]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID del Pokémon (número de Pokédex)
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         example: 25
+ *     responses:
+ *       200:
+ *         description: Lista de movimientos del Pokémon
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MovesResponse'
+ *       400:
+ *         $ref: '#/components/responses/InvalidId'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
+ */
 app.get("/pokemon/:id/moves", async (req, res) => {
   const { valid, id } = validatePokemonId(req.params.id);
   if (!valid) {
